@@ -90,37 +90,6 @@ def process_y_matrix(
 
     return y_df
 
-def process_y_matrix_cancertype(
-    acronym, sample_freeze, mutation_burden, hyper_filter=5
-):
-    """
-    Build a y vector based on cancer-type membership
-
-    Arguments
-    ---------
-    acronym: the TCGA cancer-type barcode
-    sample_freeze: a dataframe storing TCGA barcodes and cancer-types
-    mutation_burden: a log10 mutation count per sample (added as covariate)
-
-    Returns
-    -------
-    A y status DataFrame and a status count dataframe
-    """
-    y_df = sample_freeze.assign(status=0)
-    y_df.loc[y_df.DISEASE == acronym, "status"] = 1
-
-    y_df = y_df.set_index("SAMPLE_BARCODE").merge(
-        mutation_burden, left_index=True, right_index=True
-    )
-
-    burden_filter = y_df["log10_mut"] < hyper_filter * y_df["log10_mut"].std()
-    y_df = y_df.loc[burden_filter, :]
-
-    count_df = pd.DataFrame(y_df.status.value_counts()).reset_index()
-    count_df.columns = ["status", acronym]
-
-    return y_df, count_df
-
 def align_matrices(x_file_or_df, y, add_cancertype_covariate=True,
                    add_mutation_covariate=True):
     """
@@ -170,6 +139,30 @@ def align_matrices(x_file_or_df, y, add_cancertype_covariate=True,
         )
 
     return use_samples, x_df, y, gene_features
+
+def align_matrices_mut_burden(x_df, y, add_cancertype_covariate=True):
+
+    # select samples to use, assuming y has already been filtered by cancer type
+    use_samples = set(y.index).intersection(set(x_df.index))
+    x_df = x_df.reindex(use_samples)
+    y = y.reindex(use_samples)
+
+    # add features to X matrix if necessary
+    gene_features = np.ones(x_df.shape[1]).astype('bool')
+
+    if add_cancertype_covariate:
+        # add one-hot covariate for cancer type
+        covariate_df = pd.get_dummies(y.DISEASE)
+        x_df = x_df.merge(covariate_df, left_index=True, right_index=True)
+
+    num_added_features = x_df.shape[1] - gene_features.shape[0]
+    if num_added_features > 0:
+        gene_features = np.concatenate(
+            (gene_features, np.zeros(num_added_features).astype('bool'))
+        )
+
+    return use_samples, x_df, y, gene_features
+
 
 def standardize_gene_features(x_df, gene_features):
     """Standardize (take z-scores of) real-valued gene expression features.

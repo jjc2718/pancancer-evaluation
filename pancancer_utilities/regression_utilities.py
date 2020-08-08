@@ -72,7 +72,7 @@ def train_model(x_train, x_test, y_train, alphas, l1_ratios, seed, n_folds=5, ma
         X=x_train,
         y=y_train.log10_mut,
         cv=n_folds,
-        method="decision_function",
+        method="predict",
     )
 
     # Get all performance results
@@ -125,7 +125,7 @@ def get_metrics(y_true, y_pred):
     return {"mse": mean_squared_error(y_true, y_pred),
             "r_squared": r2_score(y_true, y_pred)}
 
-def summarize_results(results, gene, holdout_cancer_type, signal, seed,
+def summarize_results(results, holdout_cancer_type, signal, seed,
                       data_type, fold_no):
     """
     Given an input results file, summarize and output all pertinent files

@@ -148,8 +148,11 @@ for fold_no in range(args.num_folds):
         X_train_raw_df, X_test_raw_df, gene_features_filtered = du.subset_by_mad(
             X_train_raw_df, X_test_raw_df, gene_features, args.subset_mad_genes
         )
-    X_train_df = standardize_gene_features(X_train_raw_df, gene_features_filtered)
-    X_test_df = standardize_gene_features(X_test_raw_df, gene_features_filtered)
+        X_train_df = standardize_gene_features(X_train_raw_df, gene_features_filtered)
+        X_test_df = standardize_gene_features(X_test_raw_df, gene_features_filtered)
+    else:
+        X_train_df = standardize_gene_features(X_train_raw_df, gene_features)
+        X_test_df = standardize_gene_features(X_test_raw_df, gene_features)
 
     # fit the model
     logging.debug('Training model for fold {}'.format(fold_no))
@@ -174,26 +177,26 @@ for fold_no in range(args.num_folds):
     )
     coef_df = coef_df.assign(fold=fold_no)
 
-    y_train_results = get_threshold_metrics(
-        y_train_df.log10_mut, y_pred_train_df, drop=False
+    y_train_results = get_metrics(
+        y_train_df.log10_mut, y_pred_train_df
     )
-    y_test_results = get_threshold_metrics(
-        y_test_df.log10_mut, y_pred_test_df, drop=False
+    y_test_results = get_metrics(
+        y_test_df.log10_mut, y_pred_test_df
     )
-    y_cv_results = get_threshold_metrics(
-        y_train_df.log10_mut, y_cv_df, drop=False
+    y_cv_results = get_metrics(
+        y_train_df.log10_mut, y_cv_df
     )
     # summarize all results in dataframes
     train_metrics_ = summarize_results(
-        y_train_results, gene_name, args.holdout_cancer_type, signal,
+        y_train_results, args.holdout_cancer_type, signal,
         args.seed, "train", fold_no
     )
     test_metrics_ = summarize_results(
-        y_test_results, gene_name, args.holdout_cancer_type, signal,
+        y_test_results, args.holdout_cancer_type, signal,
         args.seed, "test", fold_no
     )
     cv_metrics_ = summarize_results(
-        y_cv_results, gene_name, args.holdout_cancer_type, signal,
+        y_cv_results, args.holdout_cancer_type, signal,
         args.seed, "cv", fold_no
     )
 
@@ -208,6 +211,7 @@ for fold_no in range(args.num_folds):
 ### 5. Save results to output files ###
 #######################################
 
+gene_coef_df = pd.concat(gene_coef_list)
 gene_metrics_df = pd.concat(gene_metrics_list)
 
 gene_coef_df.to_csv(

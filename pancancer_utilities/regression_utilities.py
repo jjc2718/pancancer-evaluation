@@ -4,7 +4,7 @@ Functions for predicting mutation burden based on gene expression data.
 """
 import pandas as pd
 from sklearn.pipeline import Pipeline
-from sklearn.linear_model import SGDRegressor
+from sklearn.linear_model import ElasticNet
 from sklearn.metrics import (
     mean_squared_error,
     r2_score
@@ -33,8 +33,6 @@ def train_model(x_train, x_test, y_train, alphas, l1_ratios, seed, n_folds=5, ma
     """
     # Setup the model parameters
     reg_parameters = {
-        "regression__loss": ["squared_loss"],
-        "regression__penalty": ["elasticnet"],
         "regression__alpha": alphas,
         "regression__l1_ratio": l1_ratios,
     }
@@ -43,9 +41,8 @@ def train_model(x_train, x_test, y_train, alphas, l1_ratios, seed, n_folds=5, ma
         steps=[
             (
                 "regression",
-                SGDRegressor(
+                ElasticNet(
                     random_state=seed,
-                    loss="squared_loss",
                     max_iter=max_iter,
                     tol=1e-3,
                 ),

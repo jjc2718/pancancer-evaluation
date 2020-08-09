@@ -36,7 +36,7 @@ p.add_argument('--num_folds', type=int, default=4,
 p.add_argument('--use_pancancer', action='store_true',
                help='Whether or not to use pan-cancer data in model training')
 p.add_argument('--results_dir',
-               default=os.path.join(cfg.results_dir, 'mutation_burden'),
+               default=os.path.join(cfg.results_dir, 'burden_prediction'),
                help='Where to write results to')
 p.add_argument('--seed', type=int, default=cfg.default_seed)
 p.add_argument('--shuffle_labels', action='store_true',

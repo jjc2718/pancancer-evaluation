@@ -164,6 +164,7 @@ for fold_no in range(args.num_folds):
         y_train=y_train_df,
         alphas=cfg.alphas,
         l1_ratios=cfg.l1_ratios,
+        learning_rates=cfg.learning_rates,
         seed=args.seed,
         n_folds=cfg.folds,
         max_iter=cfg.max_iter

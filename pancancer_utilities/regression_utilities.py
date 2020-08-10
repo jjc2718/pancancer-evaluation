@@ -4,6 +4,7 @@ Functions for predicting mutation burden based on gene expression data.
 """
 import pandas as pd
 from sklearn.pipeline import Pipeline
+from sklearn.linear_model import SGDRegressor
 from sklearn.linear_model import ElasticNet
 from sklearn.metrics import (
     mean_squared_error,
@@ -12,7 +13,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import cross_val_predict
 from sklearn.model_selection import GridSearchCV
 
-def train_model(x_train, x_test, y_train, alphas, l1_ratios, seed, n_folds=5, max_iter=1000):
+def train_model(x_train, x_test, y_train, alphas, l1_ratios, learning_rates,
+               seed, n_folds=5, max_iter=1000):
     """
     Build the logic and sklearn pipelines to train x matrix based on input y
 
@@ -35,15 +37,19 @@ def train_model(x_train, x_test, y_train, alphas, l1_ratios, seed, n_folds=5, ma
     reg_parameters = {
         "regression__alpha": alphas,
         "regression__l1_ratio": l1_ratios,
+        "regression__eta0": learning_rates
     }
 
     estimator = Pipeline(
         steps=[
             (
                 "regression",
-                ElasticNet(
+                SGDRegressor(
+                    loss='squared_loss',
+                    penalty='elasticnet',
                     random_state=seed,
                     max_iter=max_iter,
+                    learning_rate='constant',
                     tol=1e-3,
                 ),
             )

@@ -42,6 +42,7 @@ def load_expression_data(scale_input=False, verbose=False):
 
     return rnaseq_df
 
+
 def load_pancancer_data(gene_list, verbose=False):
     """Load pan-cancer relevant data from previous Greene Lab repos.
 
@@ -92,7 +93,8 @@ def load_pancancer_data(gene_list, verbose=False):
         with open(cfg.pancan_data, 'wb') as f:
             pkl.dump(pancan_data, f)
 
-    return (genes_df, pancan_data)
+    return genes_df, pancan_data
+
 
 def load_top_50():
     """Load top 50 mutated genes in TCGA from BioBombe repo.
@@ -107,6 +109,7 @@ def load_top_50():
             base_url, commit)
     genes_df = pd.read_csv(file, sep='\t')
     return genes_df
+
 
 def load_pancancer_data_from_repo():
     """Load data to build feature matrices from pancancer repo. """
@@ -137,10 +140,12 @@ def load_pancancer_data_from_repo():
         mut_burden_df
     )
 
+
 def load_sample_info(verbose=False):
     if verbose:
         print('Loading sample info...', file=sys.stderr)
     return pd.read_csv(cfg.sample_info, sep='\t', index_col='sample_id')
+
 
 def split_by_cancer_type(rnaseq_df, sample_info_df, holdout_cancer_type,
                          use_pancancer=False, num_folds=4, fold_no=1,
@@ -185,7 +190,8 @@ def split_by_cancer_type(rnaseq_df, sample_info_df, holdout_cancer_type,
     else:
         rnaseq_train_df = cancer_type_train_df
 
-    return (rnaseq_train_df, rnaseq_test_df)
+    return rnaseq_train_df, rnaseq_test_df
+
 
 def split_single_cancer_type(cancer_type_df, num_folds, fold_no, seed):
     """Split data for a single cancer type into train and test sets."""
@@ -195,6 +201,7 @@ def split_single_cancer_type(cancer_type_df, num_folds, fold_no, seed):
             train_df = cancer_type_df.iloc[train_ixs]
             test_df = cancer_type_df.iloc[test_ixs]
     return train_df, test_df
+
 
 def summarize_results(results, gene, holdout_cancer_type, signal, z_dim,
                       seed, algorithm, data_type):
@@ -257,7 +264,7 @@ def subset_by_mad(X_train_df, X_test_df, gene_features, subset_mad_genes, verbos
     ---------
     X_train_df: training data, samples x genes
     X_test_df: test data, samples x genes
-    gene_features: numpy array of gene features
+    gene_features: numpy bool array, indicating which features are genes (and should be subsetted/standardized)
     subset_mad_genes (int): number of genes to take
 
     Returns
@@ -267,9 +274,12 @@ def subset_by_mad(X_train_df, X_test_df, gene_features, subset_mad_genes, verbos
     if verbose:
         print('Taking subset of gene features', file=sys.stderr)
 
-    mad_genes_df = pd.DataFrame(
-            X_train_df.loc[:, gene_features].mad(axis=0).sort_values(ascending=False)
-    ).reset_index()
+    mad_genes_df = (
+        X_train_df.loc[:, gene_features]
+                  .mad(axis=0)
+                  .sort_values(ascending=False)
+                  .reset_index()
+    )
     mad_genes_df.columns = ['gene_id', 'mean_absolute_deviation']
     mad_genes = mad_genes_df.iloc[:subset_mad_genes, :].gene_id.astype(str).values
 
@@ -282,6 +292,5 @@ def subset_by_mad(X_train_df, X_test_df, gene_features, subset_mad_genes, verbos
     ))
     train_df = X_train_df.reindex(valid_features, axis='columns')
     test_df = X_test_df.reindex(valid_features, axis='columns')
-    return (train_df, test_df, gene_features)
-
+    return train_df, test_df, gene_features
 

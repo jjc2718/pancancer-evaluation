@@ -90,6 +90,7 @@ def process_y_matrix(
 
     return y_df
 
+
 def align_matrices(x_file_or_df, y, add_cancertype_covariate=True,
                    add_mutation_covariate=True):
     """
@@ -175,10 +176,11 @@ def standardize_gene_features(x_df, gene_features):
     x_df_other = x_df.loc[:, ~gene_features]
     x_df_scaled = pd.DataFrame(
         StandardScaler().fit_transform(x_df_gene),
-        index=x_df_gene.index,
-        columns=x_df_gene.columns
+        index=x_df_gene.index.copy(),
+        columns=x_df_gene.columns.copy()
     )
     return pd.concat((x_df_scaled, x_df_other), axis=1)
+
 
 def check_status(file):
     """

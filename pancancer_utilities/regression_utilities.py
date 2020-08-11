@@ -5,7 +5,6 @@ Functions for predicting mutation burden based on gene expression data.
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDRegressor
-from sklearn.linear_model import ElasticNet
 from sklearn.metrics import (
     mean_squared_error,
     r2_score
@@ -34,55 +33,62 @@ def train_model(x_train, x_test, y_train, alphas, l1_ratios, learning_rates,
     and cross validation
     """
     # Setup the model parameters
-    reg_parameters = {
-        "regression__alpha": alphas,
-        "regression__l1_ratio": l1_ratios,
-        "regression__eta0": learning_rates
-    }
+    # reg_parameters = {
+    #     "regression__alpha": alphas,
+    #     "regression__l1_ratio": l1_ratios,
+    #     "regression__eta0": learning_rates
+    # }
 
-    estimator = Pipeline(
-        steps=[
-            (
-                "regression",
-                SGDRegressor(
-                    loss='squared_loss',
-                    penalty='elasticnet',
-                    random_state=seed,
-                    max_iter=max_iter,
-                    learning_rate='constant',
-                    tol=1e-3,
-                ),
-            )
-        ]
-    )
+    # estimator = Pipeline(
+    #     steps=[
+    #         (
+    #             "regression",
+    #             SGDRegressor(
+    #                 loss='squared_loss',
+    #                 penalty='elasticnet',
+    #                 random_state=seed,
+    #                 max_iter=max_iter,
+    #                 learning_rate='constant',
+    #                 tol=1e-3,
+    #             ),
+    #         )
+    #     ]
+    # )
 
-    cv_pipeline = GridSearchCV(
-        estimator=estimator,
-        param_grid=reg_parameters,
-        n_jobs=-1,
-        cv=n_folds,
-        scoring="neg_mean_squared_error",
-        return_train_score=True,
-        iid=False
-    )
+    # cv_pipeline = GridSearchCV(
+    #     estimator=estimator,
+    #     param_grid=reg_parameters,
+    #     n_jobs=-1,
+    #     cv=n_folds,
+    #     scoring="neg_mean_squared_error",
+    #     return_train_score=True,
+    #     iid=False
+    # )
 
-    # Fit the model
-    cv_pipeline.fit(X=x_train, y=y_train.log10_mut)
+    # # Fit the model
+    # cv_pipeline.fit(X=x_train, y=y_train.log10_mut)
 
-    # Obtain cross validation results
-    y_cv = cross_val_predict(
-        cv_pipeline.best_estimator_,
-        X=x_train,
-        y=y_train.log10_mut,
-        cv=n_folds,
-        method="predict",
-    )
-
+    # # Obtain cross validation results
+    # y_cv = cross_val_predict(
+    #     cv_pipeline.best_estimator_,
+    #     X=x_train,
+    #     y=y_train.log10_mut,
+    #     cv=n_folds,
+    #     method="predict",
+    # )
     # Get all performance results
-    y_pred_train = cv_pipeline.predict(x_train)
-    y_pred_test = cv_pipeline.predict(x_test)
+    # y_pred_train = cv_pipeline.predict(x_train)
+    # y_pred_test = cv_pipeline.predict(x_test)
 
-    return cv_pipeline, y_pred_train, y_pred_test, y_cv
+    from sklearn.linear_model import LinearRegression
+    reg = LinearRegression()
+    reg.fit(x_train, y_train.log10_mut)
+    y_pred_train = reg.predict(x_train)
+    y_cv = y_pred_train[:]
+    y_pred_test = reg.predict(x_test)
+
+    # return cv_pipeline, y_pred_train, y_pred_test, y_cv
+    return reg, y_pred_train, y_pred_test, y_cv
 
 def extract_coefficients(cv_pipeline, feature_names, signal, seed):
     """
@@ -101,6 +107,31 @@ def extract_coefficients(cv_pipeline, feature_names, signal, seed):
 
     coef_df = pd.DataFrame.from_dict(
         {"feature": feature_names, "weight": final_model.coef_[0]}
+    )
+
+    coef_df = (
+        coef_df.assign(abs=coef_df["weight"].abs())
+        .sort_values("abs", ascending=False)
+        .reset_index(drop=True)
+        .assign(signal=signal, seed=seed)
+    )
+
+    return coef_df
+
+def extract_coefficients_ols(model, feature_names, signal, seed):
+    """
+    Pull out the coefficients from the trained regression models
+
+    Arguments
+    ---------
+    cv_pipeline: the trained sklearn cross validation pipeline
+    feature_names: the column names of the x matrix used to train model (features)
+    results: a results object output from `get_threshold_metrics`
+    signal: the signal of interest
+    seed: the seed used to split the data
+    """
+    coef_df = pd.DataFrame.from_dict(
+        {"feature": feature_names, "weight": model.coef_[0]}
     )
 
     coef_df = (

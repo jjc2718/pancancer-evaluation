@@ -16,7 +16,6 @@ import pancancer_utilities.config as cfg
 import pancancer_utilities.data_utilities as du
 from pancancer_utilities.tcga_utilities import (
     process_y_matrix,
-    process_y_matrix_cancertype,
     align_matrices,
     standardize_gene_features,
     check_status

@@ -14,6 +14,7 @@ EXP_SCRIPT = os.path.join(cfg.repo_root,
                           'pancancer_utilities',
                           'scripts',
                           'predict_mutation_burden.py')
+RESULTS_DIR = os.path.join(cfg.results_dir, 'burden_prediction_ols')
 MAD_GENES = 8000
 
 def get_all_cancer_types():
@@ -27,7 +28,8 @@ def run_single_experiment(cancer_type, use_pancancer, shuffle_labels,
         'python',
         EXP_SCRIPT,
         '--holdout_cancer_type', cancer_type,
-        '--subset_mad_genes', str(MAD_GENES)
+        '--subset_mad_genes', str(MAD_GENES),
+        '--results_dir', RESULTS_DIR
     ]
     if use_pancancer:
         args.append('--use_pancancer')
@@ -41,9 +43,12 @@ def run_single_experiment(cancer_type, use_pancancer, shuffle_labels,
 if __name__ == '__main__':
 
     cancer_types = get_all_cancer_types()
+    # do single cancer first, much faster
     for cancer_type in tqdm(cancer_types):
        run_single_experiment(cancer_type, False, False, verbose=True)
-       run_single_experiment(cancer_type, True, False, verbose=True)
        run_single_experiment(cancer_type, False, True, verbose=True)
+    # then pancancer, this will be slower
+    for cancer_type in tqdm(cancer_types):
+       run_single_experiment(cancer_type, True, False, verbose=True)
        run_single_experiment(cancer_type, True, True, verbose=True)
 

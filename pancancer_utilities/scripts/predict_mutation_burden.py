@@ -20,6 +20,7 @@ from pancancer_utilities.tcga_utilities import (
 from pancancer_utilities.regression_utilities import (
     train_model,
     extract_coefficients,
+    extract_coefficients_ols,
     get_metrics,
     summarize_results
 )
@@ -117,6 +118,18 @@ use_samples, rnaseq_df, y_df, gene_features = align_matrices_mut_burden(
     add_cancertype_covariate=args.use_pancancer
 )
 
+filtered_counts_file = os.path.join(args.results_dir,
+                                    'cancer_type_filtered_counts.tsv')
+# TODO: could diff this file and update if necessary?
+if not os.path.exists(filtered_counts_file):
+    (
+        y_df.DISEASE.value_counts()
+                    .to_frame()
+                    .rename({'DISEASE': 'n='}, axis='columns')
+                    .to_csv(filtered_counts_file, sep='\t', header=True,
+                            index_label='cancer_type')
+    )
+
 # shuffle mutation status labels if necessary
 if args.shuffle_labels:
     y_df.log10_mut = np.random.permutation(y_df.log10_mut.values)
@@ -158,7 +171,8 @@ for fold_no in range(args.num_folds):
     logging.debug('Training model for fold {}'.format(fold_no))
     logging.debug('-- training dimensions: {}'.format(X_train_df.shape))
     logging.debug('-- testing dimensions: {}'.format(X_test_df.shape))
-    cv_pipeline, y_pred_train_df, y_pred_test_df, y_cv_df = train_model(
+    # cv_pipeline, y_pred_train_df, y_pred_test_df, y_cv_df = train_model(
+    model, y_pred_train_df, y_pred_test_df, y_cv_df = train_model(
         x_train=X_train_df,
         x_test=X_test_df,
         y_train=y_train_df,
@@ -170,8 +184,14 @@ for fold_no in range(args.num_folds):
         max_iter=cfg.max_iter
     )
     # get coefficients
-    coef_df = extract_coefficients(
-        cv_pipeline=cv_pipeline,
+    # coef_df = extract_coefficients(
+    #     cv_pipeline=cv_pipeline,
+    #     feature_names=X_train_df.columns,
+    #     signal=signal,
+    #     seed=args.seed
+    # )
+    coef_df = extract_coefficients_ols(
+        model=model,
         feature_names=X_train_df.columns,
         signal=signal,
         seed=args.seed

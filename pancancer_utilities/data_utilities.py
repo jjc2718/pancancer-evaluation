@@ -340,17 +340,3 @@ def subset_by_mad(X_train_df, X_test_df, gene_features, subset_mad_genes, verbos
     test_df = X_test_df.reindex(valid_features, axis='columns')
     return train_df, test_df, gene_features
 
-if __name__ == '__main__':
-    rnaseq_df = load_expression_data(verbose=True)
-    sample_info_df = load_sample_info(verbose=True)
-    for fold in range(4):
-        print('Fold {}'.format(fold))
-        train_df, test_df, stratify_df = split_stratified(
-                rnaseq_df, sample_info_df, num_folds=4, fold_no=fold
-        )
-        train_df = train_df.merge(stratify_df, left_index=True, right_index=True)
-        test_df = test_df.merge(stratify_df, left_index=True, right_index=True)
-        train_counts = train_df.id_for_stratification.value_counts()
-        test_counts = test_df.id_for_stratification.value_counts()
-        print((train_counts / train_counts.sum())[:10])
-        print((test_counts / test_counts.sum())[:10])

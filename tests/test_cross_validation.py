@@ -2,7 +2,9 @@
 Test cases for cross-validation code in data_utilities.py
 """
 import pytest
+import numpy as np
 import pandas as pd
+import itertools as it
 
 import pancancer_utilities.config as cfg
 import pancancer_utilities.data_utilities as du
@@ -14,10 +16,12 @@ def expression_data():
     sample_info_df = du.load_sample_info()
     return rnaseq_df, sample_info_df
 
+
 def get_cancer_types(sample_info_df, sample_ids):
     """Get cancer types from a list of sample ids"""
     return set(sample_info_df.loc[sample_info_df.index.intersection(sample_ids), :]
                  .cancer_type.values)
+
 
 @pytest.mark.parametrize("cancer_type", ['BRCA', 'COAD', 'GBM'])
 def test_cv_single_cancer(expression_data, cancer_type):
@@ -37,6 +41,7 @@ def test_cv_single_cancer(expression_data, cancer_type):
     assert train_cancer_types == set([cancer_type])
     assert test_cancer_types == set([cancer_type])
 
+
 @pytest.mark.parametrize("cancer_type", ['BRCA', 'COAD', 'GBM'])
 def test_cv_pancancer(expression_data, cancer_type):
     rnaseq_df, sample_info_df = expression_data
@@ -53,5 +58,40 @@ def test_cv_pancancer(expression_data, cancer_type):
             sample_info_df, test_df_pancancer.index)
 
     assert set([cancer_type]).issubset(train_cancer_types)
-    assert len(train_cancer_types) > len(set([cancer_type])) 
+    assert len(train_cancer_types) > len(set([cancer_type]))
     assert test_cancer_types == set([cancer_type])
+
+
+def test_stratified_cv(expression_data):
+    rnaseq_df, sample_info_df = expression_data
+    sample_info_df = sample_info_df.reindex(rnaseq_df.index)
+    num_folds = 4
+    train_proportions = []
+    test_proportions = []
+
+    for fold in range(num_folds):
+        train_df, test_df, stratify_df = du.split_stratified(
+                rnaseq_df, sample_info_df, num_folds=4, fold_no=fold
+        )
+
+        assert train_df.shape[0] + test_df.shape[0] == rnaseq_df.shape[0]
+
+        train_df = train_df.merge(stratify_df, left_index=True, right_index=True)
+        test_df = test_df.merge(stratify_df, left_index=True, right_index=True)
+        train_counts = train_df.id_for_stratification.value_counts()
+        test_counts = test_df.id_for_stratification.value_counts()
+        train_fold_props = train_counts / train_counts.sum()
+        test_fold_props = test_counts / test_counts.sum()
+        train_proportions.append(train_fold_props)
+        test_proportions.append(test_fold_props)
+
+    # check that proportions of each stratification are approximately
+    # the same between folds (in other words, check that stratified CV is
+    # working properly)
+    for ix1, ix2 in it.combinations(range(num_folds), 2):
+        # absolute scale of the proportions can vary quite a bit, but on a
+        # relative scale they should be pretty close
+        assert np.allclose(train_proportions[ix1], train_proportions[ix2], rtol=1.0)
+        assert np.allclose(test_proportions[ix1], test_proportions[ix2], rtol=1.0)
+        assert np.allclose(train_proportions[ix1], test_proportions[ix2], rtol=1.0)
+

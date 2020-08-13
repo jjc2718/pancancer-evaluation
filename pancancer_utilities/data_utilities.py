@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import pandas as pd
 import pickle as pkl
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 
 import pancancer_utilities.config as cfg
@@ -165,6 +165,7 @@ def split_by_cancer_type(rnaseq_df, sample_info_df, holdout_cancer_type,
     use_pancancer (bool): whether or not to include pan-cancer data in train set
     num_folds (int): number of cross-validation folds
     fold_no (int): cross-validation fold to hold out
+    seed (int): seed for deterministic splits
 
     Returns
     -------
@@ -201,6 +202,51 @@ def split_single_cancer_type(cancer_type_df, num_folds, fold_no, seed):
             train_df = cancer_type_df.iloc[train_ixs]
             test_df = cancer_type_df.iloc[test_ixs]
     return train_df, test_df
+
+
+def split_stratified(rnaseq_df, sample_info_df, num_folds=4, fold_no=1,
+                     seed=cfg.default_seed):
+    """Split pan-cancer expression data into train and test sets.
+
+    Both train and test sets will be stratified by cancer type (similar
+    to the data loading script in
+    http://github.com/greenelab/BioBombe/0.expression-download), that is,
+    each test set will have roughly equal proportions of each cancer type.
+
+    Arguments
+    ---------
+    rnaseq_df (pd.DataFrame): samples x genes expression dataframe
+    sample_info_df (pd.DataFrame): maps samples to cancer types
+    num_folds (int): number of cross-validation folds
+    fold_no (int): cross-validation fold to hold out
+    seed (int): seed for deterministic splits
+
+    Returns
+    -------
+    rnaseq_train_df (pd.DataFrame): samples x genes train data
+    rnaseq_test_df (pd.DataFrame): samples x genes test data
+    """
+    # indexes must be in same order
+    assert rnaseq_df.index.equals(sample_info_df.index)
+
+    # merge small strats into a single large strat
+    # (StratifiedKFold will complain otherwise)
+    stratify_counts = sample_info_df.id_for_stratification.value_counts().to_dict()
+    stratify_df = sample_info_df.assign(
+        stratify_samples_count=sample_info_df.id_for_stratification)
+    stratify_df.stratify_samples_count = stratify_df.stratify_samples_count.replace(
+        stratify_counts)
+    stratify_df.loc[
+        stratify_df.stratify_samples_count <= num_folds, 'id_for_stratification'
+    ] = 'other'
+
+    kf = StratifiedKFold(n_splits=num_folds, random_state=seed)
+    for fold, (train_ixs, test_ixs) in (
+          enumerate(kf.split(rnaseq_df, stratify_df.id_for_stratification))):
+        if fold == fold_no:
+            rnaseq_train_df = rnaseq_df.iloc[train_ixs, :]
+            rnaseq_test_df = rnaseq_df.iloc[test_ixs, :]
+    return rnaseq_train_df, rnaseq_test_df, stratify_df
 
 
 def summarize_results(results, gene, holdout_cancer_type, signal, z_dim,
@@ -294,3 +340,17 @@ def subset_by_mad(X_train_df, X_test_df, gene_features, subset_mad_genes, verbos
     test_df = X_test_df.reindex(valid_features, axis='columns')
     return train_df, test_df, gene_features
 
+if __name__ == '__main__':
+    rnaseq_df = load_expression_data(verbose=True)
+    sample_info_df = load_sample_info(verbose=True)
+    for fold in range(4):
+        print('Fold {}'.format(fold))
+        train_df, test_df, stratify_df = split_stratified(
+                rnaseq_df, sample_info_df, num_folds=4, fold_no=fold
+        )
+        train_df = train_df.merge(stratify_df, left_index=True, right_index=True)
+        test_df = test_df.merge(stratify_df, left_index=True, right_index=True)
+        train_counts = train_df.id_for_stratification.value_counts()
+        test_counts = test_df.id_for_stratification.value_counts()
+        print((train_counts / train_counts.sum())[:10])
+        print((test_counts / test_counts.sum())[:10])

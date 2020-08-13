@@ -33,8 +33,9 @@ p.add_argument('--holdout_cancer_type', type=str, required=True,
                help='Provide a cancer type to hold out')
 p.add_argument('--num_folds', type=int, default=4,
                help='Number of folds of cross-validation to run')
-p.add_argument('--use_pancancer', action='store_true',
-               help='Whether or not to use pan-cancer data in model training')
+p.add_argument('--pancancer_only', action='store_true',
+               help='If included, use pan-cancer data for train and test sets '
+                    '(holdout_cancer_type will be ignored)')
 p.add_argument('--results_dir',
                default=os.path.join(cfg.results_dir, 'burden_prediction'),
                help='Where to write results to')
@@ -42,8 +43,10 @@ p.add_argument('--seed', type=int, default=cfg.default_seed)
 p.add_argument('--shuffle_labels', action='store_true',
                help='Include flag to shuffle labels as a negative control')
 p.add_argument('--subset_mad_genes', type=int, default=-1,
-               help='If included, subset gene features to this number of\
-                     features having highest mean absolute deviation.')
+               help='If included, subset gene features to this number of'
+                    'features having highest mean absolute deviation.')
+p.add_argument('--use_pancancer', action='store_true',
+               help='Whether or not to use pan-cancer data in model training')
 p.add_argument('--verbose', action='store_true')
 args = p.parse_args()
 
@@ -52,9 +55,12 @@ if args.verbose:
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')
 
 # create directory for the gene
-dirname = 'pancancer' if args.use_pancancer else 'single_cancer'
-cancer_type_dir = os.path.join(args.results_dir, dirname,
-                               args.holdout_cancer_type)
+if args.pancancer_only:
+    cancer_type_dir = os.path.join(args.results_dir, 'pancancer_only')
+else:
+    dirname = 'pancancer' if args.use_pancancer else 'single_cancer'
+    cancer_type_dir = os.path.join(args.results_dir, dirname,
+                                   args.holdout_cancer_type)
 os.makedirs(cancer_type_dir, exist_ok=True)
 
 # check if gene has been processed already
@@ -82,8 +88,9 @@ genes_df, pancan_data = du.load_pancancer_data(None, verbose=args.verbose)
 # load expression data
 rnaseq_df = du.load_expression_data(verbose=args.verbose)
 sample_info_df = du.load_sample_info(verbose=args.verbose)
-assert args.holdout_cancer_type in np.unique(sample_info_df.cancer_type), \
-        'Holdout cancer type must be a valid TCGA cancer type identifier'
+if not args.pancancer_only:
+    assert args.holdout_cancer_type in np.unique(sample_info_df.cancer_type), \
+            'Holdout cancer type must be a valid TCGA cancer type identifier'
 
 # track total metrics for each gene in one file
 metric_cols = [
@@ -114,7 +121,7 @@ y_df.index.names = rnaseq_df.index.names
 use_samples, rnaseq_df, y_df, gene_features = align_matrices_mut_burden(
     x_df=rnaseq_df,
     y=y_df,
-    add_cancertype_covariate=args.use_pancancer
+    add_cancertype_covariate=(args.use_pancancer or args.pancancer_only)
 )
 
 filtered_counts_file = os.path.join(args.results_dir,
@@ -142,14 +149,20 @@ for fold_no in range(args.num_folds):
     logging.debug('Splitting data and preprocessing features...')
 
     # split data into train and test sets
-    try:
-        X_train_raw_df, X_test_raw_df = du.split_by_cancer_type(
-           rnaseq_df, sample_info_df, args.holdout_cancer_type,
-           num_folds=args.num_folds, fold_no=fold_no,
-           use_pancancer=args.use_pancancer, seed=args.seed)
-    except ValueError:
-        exit('No test samples found for cancer type: {}\n'.format(
-               args.holdout_cancer_type))
+    sample_info_df = sample_info_df.reindex(rnaseq_df.index)
+    if args.pancancer_only:
+        X_train_raw_df, X_test_raw_df, _ = du.split_stratified(
+           rnaseq_df, sample_info_df, num_folds=args.num_folds,
+           fold_no=fold_no, seed=args.seed)
+    else:
+        try:
+            X_train_raw_df, X_test_raw_df = du.split_by_cancer_type(
+                rnaseq_df, sample_info_df, args.holdout_cancer_type,
+                num_folds=args.num_folds, fold_no=fold_no,
+                use_pancancer=args.use_pancancer, seed=args.seed)
+        except ValueError:
+            exit('No test samples found for cancer type: {}\n'.format(
+                   args.holdout_cancer_type))
 
     y_train_df = y_df.reindex(X_train_raw_df.index)
     y_test_df = y_df.reindex(X_test_raw_df.index)

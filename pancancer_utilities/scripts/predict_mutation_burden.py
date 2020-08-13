@@ -18,11 +18,10 @@ from pancancer_utilities.tcga_utilities import (
     check_status
 )
 from pancancer_utilities.regression_utilities import (
-    train_model,
-    extract_coefficients,
+    train_model_ols,
     extract_coefficients_ols,
-    get_metrics,
-    summarize_results
+    get_regression_metrics,
+    summarize_regression_results
 )
 
 #########################################
@@ -171,25 +170,12 @@ for fold_no in range(args.num_folds):
     logging.debug('Training model for fold {}'.format(fold_no))
     logging.debug('-- training dimensions: {}'.format(X_train_df.shape))
     logging.debug('-- testing dimensions: {}'.format(X_test_df.shape))
-    # cv_pipeline, y_pred_train_df, y_pred_test_df, y_cv_df = train_model(
-    model, y_pred_train_df, y_pred_test_df, y_cv_df = train_model(
+    model, y_pred_train_df, y_pred_test_df = train_model_ols(
         x_train=X_train_df,
         x_test=X_test_df,
-        y_train=y_train_df,
-        alphas=cfg.alphas,
-        l1_ratios=cfg.l1_ratios,
-        learning_rates=cfg.learning_rates,
-        seed=args.seed,
-        n_folds=cfg.folds,
-        max_iter=cfg.max_iter
+        y_train=y_train_df
     )
     # get coefficients
-    # coef_df = extract_coefficients(
-    #     cv_pipeline=cv_pipeline,
-    #     feature_names=X_train_df.columns,
-    #     signal=signal,
-    #     seed=args.seed
-    # )
     coef_df = extract_coefficients_ols(
         model=model,
         feature_names=X_train_df.columns,
@@ -198,31 +184,24 @@ for fold_no in range(args.num_folds):
     )
     coef_df = coef_df.assign(fold=fold_no)
 
-    y_train_results = get_metrics(
+    y_train_results = get_regression_metrics(
         y_train_df.log10_mut, y_pred_train_df
     )
-    y_test_results = get_metrics(
+    y_test_results = get_regression_metrics(
         y_test_df.log10_mut, y_pred_test_df
     )
-    y_cv_results = get_metrics(
-        y_train_df.log10_mut, y_cv_df
-    )
     # summarize all results in dataframes
-    train_metrics_ = summarize_results(
+    train_metrics_ = summarize_regression_results(
         y_train_results, args.holdout_cancer_type, signal,
         args.seed, "train", fold_no
     )
-    test_metrics_ = summarize_results(
+    test_metrics_ = summarize_regression_results(
         y_test_results, args.holdout_cancer_type, signal,
         args.seed, "test", fold_no
     )
-    cv_metrics_ = summarize_results(
-        y_cv_results, args.holdout_cancer_type, signal,
-        args.seed, "cv", fold_no
-    )
 
     # compile summary metrics
-    metrics_ = [train_metrics_, test_metrics_, cv_metrics_]
+    metrics_ = [train_metrics_, test_metrics_]
     metric_df_ = pd.DataFrame(metrics_, columns=metric_cols)
     gene_metrics_list.append(metric_df_)
 
@@ -241,7 +220,6 @@ gene_coef_df.to_csv(
 
 output_file = os.path.join(
     cancer_type_dir, "{}_metrics.tsv.gz".format(signal))
-
 gene_metrics_df.to_csv(
     output_file, sep="\t", index=False, compression="gzip", float_format="%.5g"
 )

@@ -18,8 +18,10 @@ from pancancer_utilities.tcga_utilities import (
     check_status
 )
 from pancancer_utilities.regression_utilities import (
-    train_model_ols,
-    extract_coefficients_ols,
+    # train_model_ols,
+    # extract_coefficients_ols,
+    train_model,
+    extract_coefficients,
     get_regression_metrics,
     summarize_regression_results
 )
@@ -183,14 +185,31 @@ for fold_no in range(args.num_folds):
     logging.debug('Training model for fold {}'.format(fold_no))
     logging.debug('-- training dimensions: {}'.format(X_train_df.shape))
     logging.debug('-- testing dimensions: {}'.format(X_test_df.shape))
-    model, y_pred_train_df, y_pred_test_df = train_model_ols(
-        x_train=X_train_df,
-        x_test=X_test_df,
-        y_train=y_train_df
+    # model, y_pred_train_df, y_pred_test_df = train_model_ols(
+    #     x_train=X_train_df,
+    #     x_test=X_test_df,
+    #     y_train=y_train_df
+    # )
+    # get coefficients
+    # coef_df = extract_coefficients_ols(
+    #     model=model,
+    #     feature_names=X_train_df.columns,
+    #     signal=signal,
+    #     seed=args.seed
+    # )
+    cv_pipeline, y_pred_train, y_pred_test = train_model(
+        X_train=X_train_df,
+        X_test=X_test_df,
+        y_train=y_train_df,
+        alphas=cfg.alphas,
+        l1_ratios=cfg.l1_ratios,
+        learning_rates=cfg.learning_rates,
+        seed=args.seed,
+        n_folds=cfg.train_folds
     )
     # get coefficients
-    coef_df = extract_coefficients_ols(
-        model=model,
+    coef_df = extract_coefficients(
+        cv_pipeline=cv_pipeline,
         feature_names=X_train_df.columns,
         signal=signal,
         seed=args.seed
@@ -198,10 +217,10 @@ for fold_no in range(args.num_folds):
     coef_df = coef_df.assign(fold=fold_no)
 
     y_train_results = get_regression_metrics(
-        y_train_df.log10_mut, y_pred_train_df
+        y_train_df.log10_mut, y_pred_train
     )
     y_test_results = get_regression_metrics(
-        y_test_df.log10_mut, y_pred_test_df
+        y_test_df.log10_mut, y_pred_test
     )
     # summarize all results in dataframes
     train_metrics_ = summarize_regression_results(

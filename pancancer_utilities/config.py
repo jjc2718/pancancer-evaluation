@@ -23,11 +23,11 @@ num_features_raw = 8000
 # hyperparameters for classification experiments
 filter_prop = 0.05
 filter_count = 15
-folds = 3
+train_folds = 3
 max_iter = 200
-alphas = [0.001, 0.01, 0.1, 0.5, 1, 10]
-l1_ratios = [0.1, 0.2, 0.3, 0.4, 0.5, 0.7]
-learning_rates = [0.01, 0.005, 0.001, 0.0005, 0.0001]
+alphas = [0.01, 0.1, 1, 10, 100]
+l1_ratios = [0.0, 0.25, 0.5, 0.75, 0.9]
+learning_rates = [0.001, 0.0001, 1e-5]
 
 # default seed for random number generator
 default_seed = 42

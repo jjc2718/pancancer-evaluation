@@ -398,6 +398,13 @@ def compare_inter_cancer_coefs(gene_name, per_gene_jaccard, pancancer_comparison
     return pd.DataFrame(inter_cancer_jaccard,
                         columns=['id1', 'id2', 'train_set', 'mean_jaccard', 'reject_null'])
 
+def add_id_info(info_df, results_dir, use_pancancer=False):
+    """Add information about train set size/label proportion to results df
+
+    TODO better documentation
+    """
+    return info_df
+
 
 def heatmap_from_results(results_df,
                          plot_gene_list=None,

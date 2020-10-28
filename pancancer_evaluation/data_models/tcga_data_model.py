@@ -232,6 +232,46 @@ class TCGADataModel():
             self.y_test_df.status = np.random.permutation(
                 self.y_test_df.status.values)
 
+    def process_train_data_for_gene(self,
+                                    train_gene,
+                                    train_classification,
+                                    output_dir,
+                                    test_cancer_type=None,
+                                    shuffle_labels=False):
+        """
+        Prepare to train model on a given gene. Preparation of test data must
+        be done later (e.g. by calling another process_* function).
+        Arguments
+        ---------
+        train_identifier (str): gene combination to train on
+        train_classification (str): 'oncogene' or 'TSG' for the training gene
+        output_dir (str): directory to write output to, if None don't write output
+        shuffle_labels (bool): whether or not to shuffle labels (negative control)
+        """
+        y_train_df_raw = self._generate_labels(train_gene, train_classification,
+                                               output_dir)
+
+        # for these experiments we don't use cancer type covariate
+        if test_cancer_type is not None:
+            filtered_train_data = self._filter_data_for_gene_and_cancer(
+                self.rnaseq_df,
+                y_train_df_raw,
+                test_cancer_type,
+                not_cancer=True
+            )
+        else:
+            filtered_train_data = self._filter_data_for_gene(
+                self.rnaseq_df,
+                y_train_df_raw,
+                use_pancancer=False
+            )
+
+        self.X_train_raw_df, self.y_train_df, self.gene_features = filtered_train_data
+
+        if shuffle_labels:
+            self.y_train_df.status = np.random.permutation(
+                self.y_train_df.status.values)
+
     def _load_data(self, debug=False, test=False):
         """Load and store relevant data.
 

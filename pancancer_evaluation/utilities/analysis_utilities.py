@@ -411,7 +411,6 @@ def add_id_info(info_df, results_dir, use_pancancer=False):
         # sample sizes here
         id_counts_df = process_counts_pancancer(id_counts_df)
 
-    print(id_counts_df.head())
     id_info_df = info_df.merge(id_counts_df, how='inner', on='identifier')
 
     # add label proportion info, taken from filtered_cancertypes files

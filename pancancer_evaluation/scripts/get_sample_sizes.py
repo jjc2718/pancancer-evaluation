@@ -49,5 +49,5 @@ if __name__ == '__main__':
             print('Skipping gene {}, not in mutation data'.format(gene))
             continue
 
-    id_counts_df.to_csv('test.tsv', sep='\t', index=False)
+    id_counts_df.to_csv(cfg.id_sample_counts, sep='\t', index=False)
 

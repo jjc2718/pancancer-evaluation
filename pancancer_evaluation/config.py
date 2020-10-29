@@ -11,6 +11,7 @@ pancan_data = data_dir / 'pancancer_data.pkl'
 rnaseq_data = data_dir / 'tcga_expression_matrix_processed.tsv.gz'
 sample_counts = data_dir / 'tcga_sample_counts.tsv'
 sample_info = data_dir / 'tcga_sample_identifiers.tsv'
+id_sample_counts = data_dir / 'id_counts_preprocessed.tsv'
 
 # location of test data
 test_data_dir = repo_root / 'tests' / 'data'

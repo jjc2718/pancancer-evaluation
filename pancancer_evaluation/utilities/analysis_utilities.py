@@ -403,7 +403,33 @@ def add_id_info(info_df, results_dir, use_pancancer=False):
 
     TODO better documentation
     """
-    return info_df
+    # add training set size info, generated in scripts/get_sample_sizes.py
+    id_counts_df = pd.read_csv(cfg.id_sample_counts, sep='\t',
+                               index_col='identifier')
+    if use_pancancer:
+        # TODO: what to do with use_pancancer? need to figure out how to group
+        # sample sizes here
+        pass
+
+    id_info_df = info_df.merge(id_counts_df, how='inner', on='identifier')
+
+    # add label proportion info, taken from filtered_cancertypes files
+    # in results_dir
+    # unique_genes = np.unique(
+    #     id_info_df.identifier.str.split('_', expand=True)[0])
+    # id_proportions_df = get_id_label_proportions(results_dir, unique_genes)
+    # id_info_df = id_info_df.merge(id_info_df, how='inner', on='identifier')
+
+    return id_info_df
+
+
+def process_counts_pancancer(info_df, id_counts_df):
+    return id_counts_df
+
+
+def get_id_label_proportions(results_dir, use_pancancer=False):
+    id_proportions_df = pd.DataFrame()
+    return id_proportions_df
 
 
 def heatmap_from_results(results_df,

@@ -404,13 +404,14 @@ def add_id_info(info_df, results_dir, use_pancancer=False):
     TODO better documentation
     """
     # add training set size info, generated in scripts/get_sample_sizes.py
-    id_counts_df = pd.read_csv(cfg.id_sample_counts, sep='\t',
-                               index_col='identifier')
+    id_counts_df = pd.read_csv(cfg.id_sample_counts, sep='\t')
+
     if use_pancancer:
         # TODO: what to do with use_pancancer? need to figure out how to group
         # sample sizes here
-        pass
+        id_counts_df = process_counts_pancancer(id_counts_df)
 
+    print(id_counts_df.head())
     id_info_df = info_df.merge(id_counts_df, how='inner', on='identifier')
 
     # add label proportion info, taken from filtered_cancertypes files
@@ -423,8 +424,24 @@ def add_id_info(info_df, results_dir, use_pancancer=False):
     return id_info_df
 
 
-def process_counts_pancancer(info_df, id_counts_df):
-    return id_counts_df
+def process_counts_pancancer(id_counts_df):
+    identifiers = np.unique(id_counts_df.identifier)
+    id_counts_pancancer = []
+    for identifier in identifiers:
+        # NOTE this is an approximation since here we assume that all test data
+        # is included in the training set, but in reality we do cross-validation
+        # so training set size will vary
+        # TODO: this is highly redundant and can probably be sped up if necessary
+        gene = identifier.split('_')[0]
+        id_counts_gene = (
+            id_counts_df[id_counts_df.identifier.str.startswith(gene)]
+                .sum(axis='index')['count']
+        )
+        id_counts_pancancer.append(id_counts_gene)
+    id_counts_pancancer_df = (
+        id_counts_df.assign(pancancer_count=id_counts_pancancer)
+    )
+    return id_counts_pancancer_df
 
 
 def get_id_label_proportions(results_dir, use_pancancer=False):

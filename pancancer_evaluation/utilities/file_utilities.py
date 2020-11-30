@@ -84,11 +84,17 @@ def save_results_cross_cancer(output_dir,
                               train_gene_or_identifier,
                               test_identifier,
                               shuffle_labels,
-                              percent_holdout=None):
+                              percent_holdout=None,
+                              seed=None):
 
     signal = 'shuffled' if shuffle_labels else 'signal'
 
-    if percent_holdout is not None:
+
+    if percent_holdout is not None and seed is not None:
+        fname_prefix = '{}.{}.{}_p{}_s{}'.format(
+            train_gene_or_identifier, test_identifier, signal,
+            percent_holdout, seed)
+    elif percent_holdout is not None:
         fname_prefix = '{}.{}.{}_p{}'.format(
             train_gene_or_identifier, test_identifier, signal, percent_holdout)
     else:
@@ -181,11 +187,16 @@ def check_cross_cancer_file(output_dir,
                             train_gene_or_identifier,
                             test_identifier,
                             shuffle_labels,
-                            percent_holdout=None):
+                            percent_holdout=None,
+                            seed=None):
 
     signal = 'shuffled' if shuffle_labels else 'signal'
 
-    if percent_holdout is not None:
+    if percent_holdout is not None and seed is not None:
+        fname_prefix = '{}.{}.{}_p{}_s{}'.format(
+            train_gene_or_identifier, test_identifier, signal,
+            percent_holdout, seed)
+    elif percent_holdout is not None:
         fname_prefix = '{}.{}.{}_p{}'.format(
             train_gene_or_identifier, test_identifier, signal, percent_holdout)
     else:

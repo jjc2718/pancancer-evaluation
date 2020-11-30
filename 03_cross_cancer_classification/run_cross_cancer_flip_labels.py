@@ -187,7 +187,8 @@ if __name__ == '__main__':
                                                             identifier,
                                                             identifier,
                                                             shuffle_labels,
-                                                            percent_holdout=percent_holdout)
+                                                            percent_holdout=percent_holdout,
+                                                            seed=args.seed)
                     results = evaluate_cross_cancer(tcga_data,
                                                     identifier,
                                                     identifier,
@@ -238,7 +239,8 @@ if __name__ == '__main__':
                                                  identifier,
                                                  identifier,
                                                  shuffle_labels,
-                                                 percent_holdout=percent_holdout)
+                                                 percent_holdout=percent_holdout,
+                                                 seed=args.seed)
 
                 if log_df is not None:
                     fu.write_log_file(log_df, args.log_file)

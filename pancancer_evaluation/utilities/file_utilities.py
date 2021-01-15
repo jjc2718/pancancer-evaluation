@@ -121,7 +121,7 @@ def save_results_cross_cancer(output_dir,
     )
 
     output_file = Path(
-        output_dir, "{}_classify_metrics.tsv.gz".format(
+        output_dir, "{}_performance_metrics.tsv.gz".format(
             fname_prefix)).resolve()
     gene_metrics_df.to_csv(
         output_file, sep="\t", index=False, compression="gzip", float_format="%.5g"

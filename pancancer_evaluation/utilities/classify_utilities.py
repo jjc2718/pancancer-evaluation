@@ -6,6 +6,7 @@ https://github.com/greenelab/BioBombe/blob/master/9.tcga-classify/scripts/tcga_u
 """
 import warnings
 
+import numpy as np
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDClassifier
@@ -13,10 +14,14 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
     precision_recall_curve,
-    average_precision_score
+    average_precision_score,
+    brier_score_loss,
 )
-from sklearn.model_selection import cross_val_predict
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import (
+    cross_val_predict,
+    GridSearchCV,
+)
+from sklearn.utils.class_weight import compute_sample_weight
 
 import pancancer_evaluation.config as cfg
 import pancancer_evaluation.utilities.data_utilities as du
@@ -70,7 +75,7 @@ def train_cross_cancer(data_model,
         # bunch of warning spam.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            model_results = train_model(
+            cv_pipeline = train_model(
                 X_train=X_train_df,
                 X_test=X_test_df,
                 y_train=y_train_df,
@@ -87,7 +92,6 @@ def train_cross_cancer(data_model,
         )
 
     # get coefficients
-    cv_pipeline = model_results[0]
     coef_df = extract_coefficients(
         cv_pipeline=cv_pipeline,
         feature_names=X_train_df.columns,
@@ -95,13 +99,13 @@ def train_cross_cancer(data_model,
         seed=data_model.seed
     )
 
-    return model_results, coef_df
+    return cv_pipeline, coef_df
 
 
 def evaluate_cross_cancer(data_model,
                           train_gene_or_identifier,
                           test_identifier,
-                          model_results,
+                          cv_pipeline,
                           coef_df,
                           shuffle_labels=False,
                           train_pancancer=False):
@@ -116,10 +120,6 @@ def evaluate_cross_cancer(data_model,
     train_pancancer (bool): whether or not to use pancancer data for training
     """
     signal = 'shuffled' if shuffle_labels else 'signal'
-    (cv_pipeline,
-     y_pred_train_df,
-     _,
-     y_cv_df) = model_results
 
     try:
         X_train_df, X_test_df = tu.preprocess_data(data_model.X_train_raw_df,
@@ -139,16 +139,21 @@ def evaluate_cross_cancer(data_model,
                     test_identifier)
             )
 
-    y_pred_test_df = cv_pipeline.decision_function(X_test_df)
-
     try:
         # also ignore warnings here, same deal as above
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             metric_df, gene_auc_df, gene_aupr_df = get_metrics_cc(
-                y_train_df, y_test_df, y_cv_df, y_pred_train_df,
-                y_pred_test_df, train_gene_or_identifier, test_identifier,
-                signal, data_model.seed, train_pancancer=train_pancancer
+                X_train_df,
+                X_test_df,
+                y_train_df,
+                y_test_df,
+                cv_pipeline,
+                train_gene_or_identifier,
+                test_identifier,
+                signal,
+                data_model.seed,
+                train_pancancer=train_pancancer
             )
     except ValueError:
         raise OneClassError(
@@ -449,21 +454,7 @@ def train_model(X_train, X_test, y_train, alphas, l1_ratios, seed, n_folds=5, ma
 
     # Fit the model
     cv_pipeline.fit(X=X_train, y=y_train.status)
-
-    # Obtain cross validation results
-    y_cv = cross_val_predict(
-        cv_pipeline.best_estimator_,
-        X=X_train,
-        y=y_train.status,
-        cv=n_folds,
-        method="decision_function",
-    )
-
-    # Get all performance results
-    y_predict_train = cv_pipeline.decision_function(X_train)
-    y_predict_test = cv_pipeline.decision_function(X_test)
-
-    return cv_pipeline, y_predict_train, y_predict_test, y_cv
+    return cv_pipeline
 
 
 def extract_coefficients(cv_pipeline, feature_names, signal, seed):
@@ -495,14 +486,14 @@ def extract_coefficients(cv_pipeline, feature_names, signal, seed):
     return coef_df
 
 
-def get_threshold_metrics(y_true, y_pred, drop=False):
+def get_threshold_metrics(y_true, y_scores, drop=False):
     """
     Retrieve true/false positive rates and auroc/aupr for class predictions
 
     Arguments
     ---------
     y_true: an array of gold standard mutation status
-    y_pred: an array of predicted mutation status
+    y_scores: an array of scores, to be thresholded into binary predictions
     drop: boolean if intermediate thresholds are dropped
 
     Returns
@@ -512,19 +503,43 @@ def get_threshold_metrics(y_true, y_pred, drop=False):
     roc_columns = ["fpr", "tpr", "threshold"]
     pr_columns = ["precision", "recall", "threshold"]
 
-    roc_results = roc_curve(y_true, y_pred, drop_intermediate=drop)
+    roc_results = roc_curve(y_true, y_scores, drop_intermediate=drop)
     roc_items = zip(roc_columns, roc_results)
     roc_df = pd.DataFrame.from_dict(dict(roc_items))
 
-    prec, rec, thresh = precision_recall_curve(y_true, y_pred)
+    prec, rec, thresh = precision_recall_curve(y_true, y_scores)
     pr_df = pd.DataFrame.from_records([prec, rec]).T
     pr_df = pd.concat([pr_df, pd.Series(thresh)], ignore_index=True, axis=1)
     pr_df.columns = pr_columns
 
-    auroc = roc_auc_score(y_true, y_pred, average="weighted")
-    aupr = average_precision_score(y_true, y_pred, average="weighted")
+    auroc = roc_auc_score(y_true, y_scores, average="weighted")
+    aupr = average_precision_score(y_true, y_scores, average="weighted")
 
     return {"auroc": auroc, "aupr": aupr, "roc_df": roc_df, "pr_df": pr_df}
+
+
+def get_prob_metrics(y_true, y_prob):
+    """
+    Retrieve metrics for probability predictions.
+
+    Currently this is just Brier scoring and weighted Brier scoring
+    (TODO: explain sample weighting).
+
+    Arguments
+    ---------
+    y_true: an array of gold standard mutation status
+    y_prob: an array of probabilities of the positive class (TODO: yes?)
+
+    Returns
+    -------
+    dict of desired metrics
+    """
+    sample_weights = compute_sample_weight('balanced', y_true)
+    return {
+        'brier_score': brier_score_loss(y_true, y_prob),
+        'weighted_brier_score': brier_score_loss(y_true, y_prob,
+                                                 sample_weight=sample_weights)
+    }
 
 
 def get_metrics(y_train_df, y_test_df, y_cv_df, y_pred_train, y_pred_test,
@@ -574,26 +589,75 @@ def get_metrics(y_train_df, y_test_df, y_cv_df, y_pred_train, y_pred_test,
     return metric_df, gene_auc_df, gene_aupr_df
 
 
-def get_metrics_cc(y_train_df, y_test_df, y_cv_df, y_pred_train,
-                   y_pred_test, train_identifier, test_identifier,
-                   signal, seed, train_pancancer=False):
+def get_metrics_cc(X_train_df,
+                   X_test_df,
+                   y_train_df,
+                   y_test_df,
+                   cv_pipeline,
+                   train_identifier,
+                   test_identifier,
+                   signal,
+                   seed,
+                   train_pancancer=False):
 
+    # get decision function scores
+    y_train_scores = cv_pipeline.decision_function(X_train_df)
+    y_test_scores = cv_pipeline.decision_function(X_test_df)
+    y_cv_scores = cross_val_predict(
+        cv_pipeline.best_estimator_,
+        X=X_train_df,
+        y=y_train_df.status,
+        cv=cfg.folds,
+        method="decision_function",
+    )
     # get classification metric values
     y_train_results = get_threshold_metrics(
-        y_train_df.status, y_pred_train, drop=False
+        y_train_df.status, y_train_scores, drop=False
     )
     y_test_results = get_threshold_metrics(
-        y_test_df.status, y_pred_test, drop=False
+        y_test_df.status, y_test_scores, drop=False
     )
     y_cv_results = get_threshold_metrics(
-        y_train_df.status, y_cv_df, drop=False
+        y_train_df.status, y_cv_scores, drop=False
     )
+
+    # make sure we're actually looking at positive class prob
+    assert np.array_equal(cv_pipeline.best_estimator_.classes_,
+                          np.array([0, 1]))
+    # get probabilities of positive class from best predictor
+    y_train_probs = cv_pipeline.predict_proba(X_train_df)[:, 1]
+    y_test_probs = cv_pipeline.predict_proba(X_test_df)[:, 1]
+    # get cross validation probabilities
+    y_cv_probs = cross_val_predict(
+        cv_pipeline.best_estimator_,
+        X=X_train_df,
+        y=y_train_df.status,
+        cv=cfg.folds,
+        method="predict_proba",
+    )[:, 1]
+    # get probability-based performance metric values
+    y_train_prob_results = get_prob_metrics(
+        y_train_df.status, y_train_probs
+    )
+    y_test_prob_results = get_prob_metrics(
+        y_test_df.status, y_test_probs
+    )
+    y_cv_prob_results = get_prob_metrics(
+        y_train_df.status, y_cv_probs
+    )
+
+    # merge metric dicts
+    y_train_results = {**y_train_results, **y_train_prob_results}
+    y_test_results = {**y_test_results, **y_test_prob_results}
+    y_cv_results = {**y_cv_results, **y_cv_prob_results}
 
     # summarize all results in dataframes
     if train_pancancer:
         metric_cols = [
             "auroc",
             "aupr",
+            "brier_score",
+            "weighted_brier_score",
             "train_gene",
             "test_identifier",
             "signal",
@@ -604,6 +668,8 @@ def get_metrics_cc(y_train_df, y_test_df, y_cv_df, y_pred_train,
         metric_cols = [
             "auroc",
             "aupr",
+            "brier_score",
+            "weighted_brier_score",
             "train_identifier",
             "test_identifier",
             "signal",
@@ -705,7 +771,12 @@ def summarize_results_cc(results, train_identifier, test_identifier, signal,
         data_type,
     ]
 
-    metrics_out_ = [results["auroc"], results["aupr"]] + results_append_list
+    metrics_out_ = [
+        results["auroc"],
+        results["aupr"],
+        results["brier_score"],
+        results["weighted_brier_score"]
+    ] + results_append_list
 
     roc_df_ = results["roc_df"]
     pr_df_ = results["pr_df"]

@@ -85,7 +85,9 @@ if __name__ == '__main__':
     tcga_cancer_types = list(np.unique(sample_info_df.cancer_type))
 
     # identifiers have the format {gene}_{cancer_type}
-    identifiers = ['_'.join(t) for t in it.product(sampled_genes,
+    # identifiers = ['_'.join(t) for t in it.product(sampled_genes,
+    #                                                tcga_cancer_types)]
+    identifiers = ['_'.join(t) for t in it.product(cfg.cross_cancer_genes,
                                                    tcga_cancer_types)]
 
     # create output directory
@@ -133,10 +135,10 @@ if __name__ == '__main__':
                 # this only needs to be done once for every train identifier
                 # then we can just evaluate on all test identifiers using
                 # the pre-trained model
-                model_results, coef_df = train_cross_cancer(tcga_data,
-                                                            train_identifier,
-                                                            train_identifier,
-                                                            shuffle_labels=shuffle_labels)
+                cv_pipeline, coef_df = train_cross_cancer(tcga_data,
+                                                          train_identifier,
+                                                          train_identifier,
+                                                          shuffle_labels=shuffle_labels)
             except NoTrainSamplesError:
                 if args.verbose:
                     print('Skipping due to no train samples: train identifier {}'.format(
@@ -203,7 +205,7 @@ if __name__ == '__main__':
                     results = evaluate_cross_cancer(tcga_data,
                                                     train_identifier,
                                                     test_identifier,
-                                                    model_results,
+                                                    cv_pipeline,
                                                     coef_df,
                                                     shuffle_labels)
                 except ResultsFileExistsError:

@@ -58,9 +58,13 @@ def load_prediction_results_cc(results_dir, experiment_descriptor):
     """
     results_df = pd.DataFrame()
     for results_file in os.listdir(results_dir):
-        if os.path.isdir(results_file): continue
-        if 'classify' not in results_file: continue
-        if results_file[0] == '.': continue
+        if os.path.isdir(results_file):
+            continue
+        if ('classify' not in results_file and
+            'performance' not in results_file): 
+            continue
+        if results_file[0] == '.':
+            continue
         full_results_file = os.path.join(results_dir, results_file)
         exp_results_df = pd.read_csv(full_results_file, sep='\t')
         exp_results_df['experiment'] = experiment_descriptor
@@ -430,6 +434,7 @@ def compare_inter_cancer_coefs(gene_name, per_gene_jaccard, pancancer_comparison
 
 
 def heatmap_from_results(results_df,
+                         metric='aupr',
                          plot_gene_list=None,
                          train_pancancer=False,
                          normalize_control=False,
@@ -468,7 +473,8 @@ def heatmap_from_results(results_df,
         # (except for cancer type in pancancer case)
         heatmap_df = normalize_to_control(results_df,
                                           train_id=train_id,
-                                          test_id=test_id)
+                                          test_id=test_id,
+                                          metric=metric)
         if train_pancancer:
             if plot_gene_list is not None:
                 conditions = ((heatmap_df[train_id].isin(plot_gene_list)) &
@@ -527,7 +533,7 @@ def heatmap_from_results(results_df,
     # then pivot to wideform heatmap and re-sort
     # (pivot sorts indexes alphabetically by default, so we have to override
     # that by reindexing afterward)
-    heatmap_df = heatmap_df.pivot(index=train_id, columns=test_id, values='aupr')
+    heatmap_df = heatmap_df.pivot(index=train_id, columns=test_id, values=metric)
     if sort_results:
         if train_pancancer:
             heatmap_df = heatmap_df.reindex(sorted_genes)
@@ -569,9 +575,9 @@ def normalize_to_control(heatmap_df,
         overlap_ixs = signal_metric.index.intersection(shuffled_metric.index)
         signal_metric = signal_metric.reindex(overlap_ixs).reset_index()
         shuffled_metric = shuffled_metric.reindex(overlap_ixs).reset_index()
-    signal_metric['diff'] = signal_metric['aupr'] - shuffled_metric['aupr']
-    return signal_metric.drop(columns=['aupr']).rename(
-            columns={'diff': 'aupr'})
+    signal_metric['diff'] = signal_metric[metric] - shuffled_metric[metric]
+    return signal_metric.drop(columns=[metric]).rename(
+            columns={'diff': metric})
 
 
 def get_proportion_info(input_df, results_dir):

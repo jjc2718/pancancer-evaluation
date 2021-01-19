@@ -87,19 +87,22 @@ if __name__ == '__main__':
     # identifiers have the format {gene}_{cancer_type}
     # identifiers = ['_'.join(t) for t in it.product(sampled_genes,
     #                                                tcga_cancer_types)]
-    identifiers = ['_'.join(t) for t in it.product(cfg.cross_cancer_genes,
-                                                   tcga_cancer_types)]
+    train_identifiers = ['_'.join(t) for t in it.product(cfg.cross_cancer_genes[:3],
+                                                         tcga_cancer_types)]
+    test_identifiers = ['_'.join(t) for t in it.product(cfg.cross_cancer_genes,
+                                                        tcga_cancer_types)]
 
     # create output directory
     output_dir = Path(args.results_dir, 'cross_cancer').resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for shuffle_labels in (False, True):
+    # for shuffle_labels in (False, True):
+    for shuffle_labels in [True]:
 
         print('shuffle_labels: {}'.format(shuffle_labels))
 
-        outer_progress = tqdm(identifiers,
-                              total=len(identifiers),
+        outer_progress = tqdm(train_identifiers,
+                              total=len(train_identifiers),
                               ncols=100,
                               file=sys.stdout)
 
@@ -162,8 +165,8 @@ if __name__ == '__main__':
                 fu.write_log_file(log_df, args.log_file)
                 continue
 
-            inner_progress = tqdm(identifiers,
-                                  total=len(identifiers),
+            inner_progress = tqdm(test_identifiers,
+                                  total=len(test_identifiers),
                                   ncols=100,
                                   file=sys.stdout)
 
